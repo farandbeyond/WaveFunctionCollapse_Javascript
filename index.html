@@ -1,0 +1,246 @@
+<html>
+    <body>
+
+        <main>
+            <canvas id="map" width="1000" height="1000" style="float: left; border:1px solid #000000;">
+            </canvas>
+            <script>
+                const canvas = document.getElementById("map");
+            </script>
+            <!-- <img src="res/WFT_2.png"> -->
+        </main>
+        <div class="controller" style="float: left; margin: 5%">
+            <button name="reset" id="reset">Reset</button>
+            <button name="random" id="random">Randomly</button>
+
+            <br>
+            <label for="seed">Seed:</label>
+            <input type="number" name="seed" id="seed" value="1">
+            <label for="advance">Hold Button to Zoom:</label>
+            <input type="checkbox" name="advance" id="advance">
+            <label for="showGrid">Show Grid?</label>
+            <input type="checkbox" name="showGrid" id="showGrid">
+            <label for="showLastTile">Show Last Updated Tile?</label>
+            <input type="checkbox" name="showLastTile" id="showLastTile" checked="checked">
+            <label for="showEntropy">Show Entropy Score?</label>
+            <input type="checkbox" name="showEntropy" id="showEntropy" checked="checked">
+            <br>
+
+            <button name="start" id="start">Load Next Tile</button>
+            <button name="refresh" id="refresh">Refresh</button>
+            <button name="populate" id="populate">Randomly Populate</button>
+            <button name="steps" id="steps">Advance 20 Steps</button>
+            <input type="number" name="stepCount" id="stepCount" style="max-width: 3em;" value="20">
+            <br>
+            <button name="finish" id="finish">Autofill</button>
+            <script>
+                document.getElementById("reset").addEventListener('click', e => {
+                    var newSeed =  Number.parseInt(document.getElementById("seed").value);
+                    
+                    if(newSeed === NaN)
+                        newSeed = 0;
+
+                    console.log(newSeed);
+                    reset(newSeed);
+                    // randomizeMap(4);
+                    redraw(canvas);
+                });
+                document.getElementById("random").addEventListener('click', e => { 
+                    var seed = Math.round(Date.now() % 10000);
+                    document.getElementById("seed").value = seed;
+                    Log("Random Map with Seed: " + seed);
+                    reset(seed);
+                    redraw(canvas);
+                });
+                document.getElementById("start").addEventListener('click', e => {
+                    var result = nextStep();
+                    if(!result.value){
+                        // alert("Failed to fill next tile");
+                        Log("Failed to load the Next Tile: " + result.reason);
+                    }
+                    redraw(document.getElementById("map"));
+                });
+                document.getElementById("refresh").addEventListener('click', e => {
+                    redraw(document.getElementById("map"));
+                });
+                document.getElementById("populate").addEventListener('click', e => {
+                    randomizeMap(5);
+                    redraw(document.getElementById("map"));
+                });
+                document.getElementById("showGrid").addEventListener('change', e => {
+                    var checked = document.getElementById("showGrid").checked;
+                    Log("Show Grid: " + checked);
+                    showGrid(checked);
+                    redraw(canvas);
+                });
+                document.getElementById("finish").addEventListener('click', e => {
+                    var result = nextStep();
+                    while(result.value){
+                        redraw(canvas);
+                        result = nextStep();
+                        // Log("Filled Tile");
+                    }
+                    Log(result.reason);
+                });
+                document.getElementById("steps").addEventListener('click', e => {
+                    var stepCount = parseInt(document.getElementById("stepCount").value);
+                    Log(`Advancing ${stepCount} steps`);
+                    for(var i=0;i<stepCount;i++){
+                        result = nextStep();
+                        if(!result.value){
+                            Log(result.reason);
+                            break;
+                        }
+                    }
+                    redraw(canvas);
+                });
+                document.getElementById("stepCount").addEventListener('change', e => {
+                    document.getElementById("steps").innerText = `Advance ${e.srcElement.value} steps`;
+                });
+                document.getElementById("showLastTile").addEventListener('change', e => {
+                    // document.getElementById("steps").innerText = `Advance ${e.srcElement.value} steps`;
+                    hiliteLastUpdatedCell = e.srcElement.checked;
+                    Log(`Hiliting Most Recent Tile Updated: ` + e.srcElement.checked);
+                });
+                document.getElementById("showEntropy").addEventListener('change', e => {
+                    // document.getElementById("steps").innerText = `Advance ${e.srcElement.value} steps`;
+                    showEntropy = e.srcElement.checked;
+                    Log(`Tiles Showing Entropy Score(s): ` + e.srcElement.checked);
+                    redraw(canvas);
+                });
+            </script>
+
+            <br><br>
+
+            <label for="tiles">Canvas Tiles (Width and Height):</label>
+            <input type="number" name="tiles" id="tiles" value="10"><br>
+            <!-- <label for="height">Canvas Height (Tiles):</label>
+            <input type="number" name="height" id="height" value="10"><br> -->
+            <label for="size">Tile Size (Pixels):</label>
+            <input type="number" name="size" id="size" value="100"><br>
+            <button name="submit" id="submit">Submit Sizes</button>
+            <br><br>
+            <image id="selectedTile"></image>
+            <br><br>
+            <button name="logclear" id="logclear">Clear Log</button>
+            <div id="log" name="log" style="border: 1px solid black;">
+
+            </div>
+
+            <script>
+                
+            </script>
+        </div>
+        <div id="images" class="images" style="float: left"></div>
+        <div id="details" class="details" style="float: left"></div>
+    </body>
+    <footer>
+        <script src="map.js"></script>
+        <script>
+            document.getElementById("submit").addEventListener('click', e => {
+                var canvas = document.getElementById("map");
+
+                var newTilesize = parseInt(document.getElementById("size").value);
+
+                var newTiles = parseInt(document.getElementById("tiles").value);
+
+                canvas.width = newTiles * newTilesize;
+                canvas.height = newTiles * newTilesize;
+
+                updateSize(newTilesize, newTiles, newTiles);
+
+                // reset();
+                redraw(canvas);
+            });
+            document.getElementById("logclear").addEventListener('click', e => {
+                document.getElementById("log").innerHTML = "";
+            });
+            document.getElementById("map").addEventListener("click", e => {
+
+                // e = Mouse click event.
+                var rect = e.target.getBoundingClientRect();
+                var x = e.clientX - rect.left; //x position within the element.
+                var y = e.clientY - rect.top;  //y position within the element.
+                // console.log("Left? : " + x + " ; Top? : " + y + ".");
+                var tileX = Math.floor(x / squareSize);
+                var tileY = Math.floor(y / squareSize);
+                if(e.ctrlKey){
+                    Log(tileX + "/" + tileY);
+                }else{
+                    setCell(tileX, tileY, parseInt(document.getElementById("selectedTile").name));
+                    redraw(document.getElementById("map"));
+                }
+
+            });
+            document.addEventListener("keydown", event => {
+                if(document.getElementById("advance").checked){
+                    var result = !collapseRandomCellTile();
+                    if(!result.value){
+                        Log("Failed to load the Next Tile: " + result.reason);
+                    }
+                    redraw(document.getElementById("map"));
+                }
+            });
+            function Log(text){
+                document.getElementById("log").insertAdjacentHTML("afterbegin",`<p>${text}</p>`);
+            }
+            function setDrawImage(image){
+                var tile = tiles[parseInt(image.name)];
+                selectedTile.src = tile.Image.src;
+                selectedTile.name = image.name;
+                selectedTile.style = `transform: rotate(${tile.Rotation}deg);`;
+                Log(tile.Contents);
+            }
+        </script>
+        <script>
+            setup(0);
+            // console.log(tiles[0]);
+            for(var i=0;i<tiles.length;i++){
+                // console.log(tiles[i]);
+                var image = new Image();
+                image.src = tiles[i].Image.src;
+                if(tiles[i].Rotation == 0){
+                    image.style = "display: block; width: 75px; border: solid black 1px;";
+                }else{
+                    image.style = `display: inline-block; width: 50px; border: solid black 1px; transform: rotate(${tiles[i].Rotation}deg);`;
+                }
+                
+                image.title = `Tile #${i}/${image.src.split("_")[1]} (${tiles[i].Weight})`;
+                image.name = i;
+                image.addEventListener("click", e => setDrawImage(e.srcElement));
+                
+                // console.log(image);
+                // document.getElementById("images").innerHTML += `<label>${i}</label>`;
+                document.getElementById("images").appendChild(image);
+                // Log("Loaded " + i);
+            }
+
+            for(var i=0;i<details.length;i++){
+                // console.log(tiles[i]);
+                var image = new Image();
+                image.src = details[i].Image.src;
+                if(details[i].Rotation == 0){
+                    image.style = "display: block; width: 75px; border: solid black 1px;";
+                }else{
+                    image.style = `display: inline-block; width: 50px; border: solid black 1px; transform: rotate(${details[i].Rotation}deg);`;
+                }
+                
+                image.title = `Tile #${i}/${image.src.split("_")[1]} (${details[i].Weight})`;
+                image.name = i;
+                // image.addEventListener("click", e => setDrawImage(e.srcElement));
+                
+                // console.log(image);
+                // document.getElementById("images").innerHTML += `<label>${i}</label>`;
+                document.getElementById("details").appendChild(image);
+                // Log("Loaded " + i);
+            }
+
+            setDrawImage(document.getElementById("images").childNodes[0]);
+            // document.getElementById("map").addEventListener("click", event => {
+            //     redraw(document.getElementById("map"));
+            // });
+            redraw(document.getElementById("map"));
+        </script>
+        
+    </footer>
+</html>
